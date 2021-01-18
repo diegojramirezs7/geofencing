@@ -1,4 +1,4 @@
-**Author's Note:** this plugin is not officially supported and is meant to be used as an example. Please feel free to pull it into your own projects, but _there is no official version hosted on pub.dev and support may be limited_. If you run into any issues running this sample, please file an issue or, even better, submit a pull request!
+<!-- **Author's Note:** this plugin is not officially supported and is meant to be used as an example. Please feel free to pull it into your own projects, but _there is no official version hosted on pub.dev and support may be limited_. If you run into any issues running this sample, please file an issue or, even better, submit a pull request!
 
 What is geofencing? 
 [here](https://developer.android.com/training/location/geofencing)
@@ -110,4 +110,14 @@ And request the correct permissions for geofencing:
 For help getting started with Flutter, view our online
 [documentation](https://flutter.io/).
 
-For help on editing plugin code, view the [documentation](https://flutter.io/developing-packages/#edit-plugin-package).
+For help on editing plugin code, view the [documentation](https://flutter.io/developing-packages/#edit-plugin-package). -->
+
+
+# Geofencing Test App
+
+### This plugin is for managing geofences
+
+Plugin users can register a geofence and register a callback for that geofence. Whenever an event is triggered for that geofence (enter, exit) the callback will be invoked. 
+
+## sample app
+A sample app that uses the plugin can be found on the ```example``` folder. The app works in combination with a server. The app sends log of the event that happen to the server. That way we can see all the events that were triggered for different users in a single place. 
