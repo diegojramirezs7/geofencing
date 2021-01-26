@@ -38,6 +38,7 @@ class _MyAppState extends State<MyApp> {
     GeofenceEvent.dwell,
     GeofenceEvent.exit
   ];
+
   final AndroidGeofencingSettings androidSettings = AndroidGeofencingSettings(
       initialTrigger: <GeofenceEvent>[
         GeofenceEvent.enter,
@@ -67,10 +68,14 @@ class _MyAppState extends State<MyApp> {
 
     getGeofences();
 
+    startConnectivitySubscription();
+    sendLogFileToServer();
+  }
+
+  Future<void> startConnectivitySubscription() async {
     _connectivitySubscription = Connectivity()
         .onConnectivityChanged
         .listen((ConnectivityResult result) async {
-      // Got a new connectivity status!
       if (result == ConnectivityResult.mobile ||
           result == ConnectivityResult.wifi) {
         try {
@@ -107,31 +112,6 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
-  Future<String> get _localPath async {
-    final directory = await getApplicationDocumentsDirectory();
-    return directory.path;
-  }
-
-  Future<File> get _localFile async {
-    final path = await _localPath;
-    return File('$path/eventLog.txt');
-  }
-
-  static void callback(List<String> ids, Location l, GeofenceEvent e) async {
-    print('Fences: $ids Location $l Event: $e');
-    final SendPort send =
-        IsolateNameServer.lookupPortByName('geofencing_send_port');
-
-    Map<String, dynamic> map = {
-      "event": e.toString(),
-      "geofences": ids,
-      "location": l.toString(),
-    };
-
-    String data = json.encode(map);
-    send?.send(data);
-  }
-
   Future<void> sendData(String dataString) async {
     try {
       //check if there's connection, if yes, send event, else, write to file
@@ -144,7 +124,6 @@ class _MyAppState extends State<MyApp> {
         //String url = 'https://safe-falls-49683.herokuapp.com/geofence/';
 
         Map<String, dynamic> data = json.decode(dataString);
-        print("there's connection x2");
 
         String eventType;
         if (data['event'] == GeofenceEvent.enter.toString()) {
@@ -179,41 +158,53 @@ class _MyAppState extends State<MyApp> {
     try {
       // read, send, delete contents
       String contents = await readLogFile();
-      List data = json.decode(contents);
-      String url = '$currentServer/events/';
-      String eventType;
-      String geofenceId;
-      var response;
-      for (Map<String, dynamic> log in data) {
-        if (log['event'] == GeofenceEvent.enter.toString()) {
-          eventType = "enter";
-        } else if (log['event'] == GeofenceEvent.exit.toString()) {
-          eventType = "exit";
-        } else {
-          eventType = "dwell";
-        }
+      if (contents != "") {
+        List data = json.decode(contents);
+        String url = '$currentServer/events/';
+        String eventType;
+        String geofenceId;
+        var response;
+        for (Map<String, dynamic> log in data) {
+          if (log['event'] == GeofenceEvent.enter.toString()) {
+            eventType = "enter";
+          } else if (log['event'] == GeofenceEvent.exit.toString()) {
+            eventType = "exit";
+          } else {
+            eventType = "dwell";
+          }
 
-        geofenceId = log['geofences'].first;
-        response = await http.post(url, body: {
-          'event': eventType,
-          'time': log['time'],
-          'geofence': geofenceId
-        });
-      }
-      if (response.statusCode == 200) {
-        final file = await _localFile;
-        return file.writeAsString("");
+          geofenceId = log['geofences'].first;
+          response = await http.post(url, body: {
+            'event': eventType,
+            'time': log['time'],
+            'geofence': geofenceId
+          });
+        }
+        if (response.statusCode == 200) {
+          final file = await _localFile;
+          return file.writeAsString("");
+        }
       }
     } catch (e) {
       print(e.toString());
     }
   }
 
+  Future<String> get _localPath async {
+    final directory = await getApplicationDocumentsDirectory();
+    return directory.path;
+  }
+
+  Future<File> get _localFile async {
+    final path = await _localPath;
+    return File('$path/eventLog.txt');
+  }
+
   Future<File> writeEventLog(String dataString, DateTime time) async {
     try {
       final file = await _localFile;
       String logFileContent = await readLogFile();
-
+      print("made it here, after reading log file");
       Map<String, dynamic> data = json.decode(dataString);
 
       data['time'] = time.toString();
@@ -224,12 +215,12 @@ class _MyAppState extends State<MyApp> {
 
         print(newString);
       } else {
-        List<Map<String, dynamic>> logFileJson = json.decode(logFileContent);
+        List logFileJson = json.decode(logFileContent);
         logFileJson.add(data);
         newString = json.encode(logFileJson);
         print(newString);
       }
-      return file.writeAsString(newString, mode: FileMode.append);
+      return file.writeAsString(newString, mode: FileMode.write);
     } catch (e) {
       print(e.toString());
       return null;
@@ -248,7 +239,8 @@ class _MyAppState extends State<MyApp> {
       return contents;
     } catch (e) {
       // If encountering an error, return 0.
-      print(e.toString());
+
+      print("inside catch statement of readlog file: ${e.toString()}");
       return "";
     }
   }
@@ -260,15 +252,19 @@ class _MyAppState extends State<MyApp> {
     print('Initialization done');
   }
 
-  String numberValidator(String value) {
-    if (value == null) {
-      return null;
-    }
-    final num a = num.tryParse(value);
-    if (a == null) {
-      return '"$value" is not a valid number';
-    }
-    return null;
+  static void callback(List<String> ids, Location l, GeofenceEvent e) async {
+    print('Fences: $ids Location $l Event: $e');
+    final SendPort send =
+        IsolateNameServer.lookupPortByName('geofencing_send_port');
+
+    Map<String, dynamic> map = {
+      "event": e.toString(),
+      "geofences": ids,
+      "location": l.toString(),
+    };
+
+    String data = json.encode(map);
+    send?.send(data);
   }
 
   void registerHandler() {
