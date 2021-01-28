@@ -17,6 +17,8 @@ dependencies:
     path: ../
   connectivity: ^2.0.2
   path_provider: ^1.6.27
+  url_launcher: ^5.7.10
+  permission_handler: ^5.0.1+1
 
 dev_dependencies:
   flutter_test:
