@@ -6,18 +6,18 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
+import 'package:geofencing_example/models/geofence_model.dart';
 import 'package:geofencing_example/platform_alert_dialog.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:geofencing/geofencing.dart';
 import 'package:connectivity/connectivity.dart';
 import 'package:path_provider/path_provider.dart';
-//import 'package:flutter/foundation.dart';
 import 'dart:io';
-import 'geofence_model.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:background_location/background_location.dart' as bgl;
+import 'constants/constants.dart';
 
 void main() {
   runApp(MaterialApp(
@@ -40,16 +40,6 @@ void main() {
       home: MyApp()));
 }
 
-// class AppWrapper extends StatelessWidget {
-//   @override
-//   Widget build(BuildContext context) {
-//     return MaterialApp(
-//       title: "Test",
-//       home: MyApp(),
-//     );
-//   }
-// }
-
 enum LocationPermission { granted, undefined, denied, restricted }
 
 class MyApp extends StatefulWidget {
@@ -57,13 +47,15 @@ class MyApp extends StatefulWidget {
   _MyAppState createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  AppLifecycleState _notification;
   String geofenceState = 'N/A';
+  List<String> registeredGeofenceIds = [];
   List<String> registeredGeofences = [];
   DateTime timeStamp;
   List<Geofence> availableGeofences = [];
   Geofence dropdownValue = Geofence(name: "Select a Geofence");
-  String currentServer = "https://safe-falls-49683.herokuapp.com";
+
   // String currentServer = 'http://10.0.2.2:5000/geofences/';
   StreamSubscription<ConnectivityResult> _connectivitySubscription;
   LocationPermission permission;
@@ -93,16 +85,31 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     IsolateNameServer.registerPortWithName(
         port.sendPort, 'geofencing_send_port');
 
+    _checkLocationPermission(context);
+
+    getGeofences();
+
+    GeofencingManager.getRegisteredGeofenceIds().then((value) {
+      setState(() {
+        registeredGeofenceIds = value;
+        geofenceIdsToNames();
+      });
+    });
+
+    startConnectivitySubscription();
+
     port.listen((dynamic data) {
       print('Event: $data');
+      sendData(data);
 
       setState(() {
         geofenceState = data;
 
-        final map = json.decode(geofenceState);
+        final Map<String, dynamic> map = json.decode(geofenceState);
 
         lastEvent = map['event'];
         lastRegion = map['geofences'].toString();
@@ -110,20 +117,45 @@ class _MyAppState extends State<MyApp> {
 
         timeStamp = DateTime.now();
       });
-
-      sendData(data);
-      // send to the server
     });
 
-    //show background location disclosure
-    //_checkLocationPermission(context);
-    //initPlatformState();
-    _checkLocationPermission(context);
-
-    getGeofences();
-
-    startConnectivitySubscription();
     sendLogFileToServer();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.inactive:
+        print("Inactive");
+        setState(() {
+          _notification = AppLifecycleState.inactive;
+        });
+        break;
+      case AppLifecycleState.paused:
+        print("Paused");
+        setState(() {
+          _notification = AppLifecycleState.paused;
+        });
+        break;
+      case AppLifecycleState.resumed:
+        print("Resumed");
+        GeofencingManager.getRegisteredGeofenceIds().then((value) {
+          setState(() {
+            registeredGeofenceIds = value;
+            geofenceIdsToNames();
+          });
+        });
+        setState(() {
+          _notification = AppLifecycleState.resumed;
+        });
+        break;
+      case AppLifecycleState.detached:
+        print("detachd");
+        setState(() {
+          _notification = AppLifecycleState.detached;
+        });
+        break;
+    }
   }
 
   void _checkLocationPermission(BuildContext context) async {
@@ -145,8 +177,7 @@ class _MyAppState extends State<MyApp> {
       ).show(context);
 
       if (value) {
-        //GeofencingManager.initialize();
-        initPlatformState();
+        await initPlatformState();
 
         var update = await Permission.location.status;
 
@@ -177,7 +208,7 @@ class _MyAppState extends State<MyApp> {
         permission = LocationPermission.granted;
       });
 
-      initPlatformState();
+      await initPlatformState();
     }
   }
 
@@ -188,6 +219,7 @@ class _MyAppState extends State<MyApp> {
       if (result == ConnectivityResult.mobile ||
           result == ConnectivityResult.wifi) {
         try {
+          getGeofences();
           String logFile = await readLogFile();
           if (logFile != "") {
             sendLogFileToServer();
@@ -201,7 +233,6 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> getGeofences() async {
     try {
-      //String url = 'https://safe-falls-49683.herokuapp.com/geofences/';
       String url = '$currentServer/geofences/';
       final response = await http.get(url);
 
@@ -216,6 +247,10 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  Widget _buildScope() {
+    return WillPopScope(child: null, onWillPop: null);
+  }
+
   void dispose() {
     _connectivitySubscription.cancel();
     super.dispose();
@@ -223,9 +258,8 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> sendData(String dataString) async {
     try {
-      //check if there's connection, if yes, send event, else, write to file
+      //check if there's connection, if yes, send event, else, write to file.
 
-      var timeStamp = DateTime.now();
       var connectivityResult = await (Connectivity().checkConnectivity());
       if (connectivityResult == ConnectivityResult.mobile ||
           connectivityResult == ConnectivityResult.wifi) {
@@ -244,19 +278,31 @@ class _MyAppState extends State<MyApp> {
         }
 
         String geofenceId = data['geofences'].first;
+        String callbackTime = data['time'];
 
         //String url = 'http://10.0.2.2:5000/events/';
         String url = '$currentServer/events/';
-        var response = await http.post(url, body: {
-          'event': eventType,
-          'time': timeStamp.toString(),
-          'geofence': geofenceId
-        });
+        // var response = await http.post(url, body: {
+        //   'event': eventType,
+        //   'time': callbackTime,
+        //   'geofence': geofenceId
+        // });
+        var response;
+        int counter = 0;
+
+        do {
+          response = await http.post(url, body: {
+            'event': eventType,
+            'time': callbackTime,
+            'geofence': geofenceId
+          });
+          counter++;
+        } while (response.statusCode != 200 || counter < 5);
         print(response.body);
       } else {
         // write to file
         print("no internet");
-        writeEventLog(dataString, timeStamp);
+        writeEventLog(dataString);
       }
     } catch (e) {
       //throw e;
@@ -273,6 +319,7 @@ class _MyAppState extends State<MyApp> {
         String eventType;
         String geofenceId;
         var response;
+
         for (Map<String, dynamic> log in data) {
           if (log['event'] == GeofenceEvent.enter.toString()) {
             eventType = "enter";
@@ -309,18 +356,16 @@ class _MyAppState extends State<MyApp> {
     return File('$path/eventLog.txt');
   }
 
-  Future<File> writeEventLog(String dataString, DateTime time) async {
+  Future<File> writeEventLog(String dataString) async {
     try {
       final file = await _localFile;
       String logFileContent = await readLogFile();
-      print("made it here, after reading log file");
       Map<String, dynamic> data = json.decode(dataString);
 
-      data['time'] = time.toString();
       String newString;
 
       if (logFileContent == "") {
-        newString = "[${json.encode(data)}]";
+        newString = "[$dataString]";
 
         print(newString);
       } else {
@@ -376,13 +421,17 @@ class _MyAppState extends State<MyApp> {
     final SendPort send =
         IsolateNameServer.lookupPortByName('geofencing_send_port');
 
+    var timeStamp = DateTime.now();
+
     Map<String, dynamic> map = {
       "event": e.toString(),
       "geofences": ids,
       "location": l.toString(),
+      "time": timeStamp.toString()
     };
 
     String data = json.encode(map);
+
     send?.send(data);
   }
 
@@ -395,7 +444,8 @@ class _MyAppState extends State<MyApp> {
         .then((_) {
       GeofencingManager.getRegisteredGeofenceIds().then((value) {
         setState(() {
-          registeredGeofences = value;
+          registeredGeofenceIds = value;
+          geofenceIdsToNames();
         });
       });
     });
@@ -405,10 +455,23 @@ class _MyAppState extends State<MyApp> {
     GeofencingManager.removeGeofenceById(dropdownValue.id.toString()).then((_) {
       GeofencingManager.getRegisteredGeofenceIds().then((value) {
         setState(() {
-          registeredGeofences = value;
+          registeredGeofenceIds = value;
+          geofenceIdsToNames();
         });
       });
     });
+  }
+
+  void geofenceIdsToNames() {
+    registeredGeofences = [];
+    for (Geofence geofence in availableGeofences) {
+      for (String id in registeredGeofenceIds) {
+        if (id == geofence.id.toString()) {
+          registeredGeofences.add(geofence.name);
+          break;
+        }
+      }
+    }
   }
 
   @override
@@ -517,6 +580,7 @@ class _MyAppState extends State<MyApp> {
                           }),
                     ],
                   ),
+                  Text("notification: $_notification"),
                   Text('Registered Geofences: $registeredGeofences'),
                   FlatButton(
                       onPressed: () {

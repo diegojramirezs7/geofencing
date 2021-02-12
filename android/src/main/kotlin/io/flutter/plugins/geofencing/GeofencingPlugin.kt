@@ -87,6 +87,7 @@ class GeofencingPlugin : ActivityAware, FlutterPlugin, MethodCallHandler {
       val expirationDuration = (args[7] as Int).toLong()
       val loiteringDelay = args[8] as Int
       val notificationResponsiveness = args[9] as Int
+      
       val geofence = Geofence.Builder()
               .setRequestId(id)
               .setCircularRegion(lat, long, radius)
@@ -95,6 +96,7 @@ class GeofencingPlugin : ActivityAware, FlutterPlugin, MethodCallHandler {
               .setNotificationResponsiveness(notificationResponsiveness)
               .setExpirationDuration(expirationDuration)
               .build()
+
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
               (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                       == PackageManager.PERMISSION_DENIED)) {
@@ -102,6 +104,7 @@ class GeofencingPlugin : ActivityAware, FlutterPlugin, MethodCallHandler {
         Log.w(TAG, msg)
         result?.error(msg, null, null)
       }
+      
       geofencingClient.addGeofences(getGeofencingRequest(geofence, initialTriggers),
               getGeofencePendingIndent(context, callbackHandle))?.run {
         addOnSuccessListener {

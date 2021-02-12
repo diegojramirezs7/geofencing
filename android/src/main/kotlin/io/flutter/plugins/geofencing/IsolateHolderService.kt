@@ -1,7 +1,3 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
 package io.flutter.plugins.geofencing
 
 import android.app.NotificationChannel
@@ -49,7 +45,7 @@ class IsolateHolderService : Service() {
                 .setContentTitle("Almost home!")
                 .setContentText("Within 1KM of home. Fine location tracking enabled.")
                 .setSmallIcon(imageId)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .build()
 
         (getSystemService(Context.POWER_SERVICE) as PowerManager).run {

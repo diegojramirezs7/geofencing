@@ -1,7 +1,7 @@
 name: geofencing_example
 description: Demonstrates how to use the geofencing plugin.
 publish_to: 'none'
-
+version: 1.0.2+2
 environment:
   sdk: ">=2.1.0 <3.0.0"
 
@@ -19,6 +19,7 @@ dependencies:
   path_provider: ^1.6.27
   url_launcher: ^5.7.10
   permission_handler: ^5.0.1+1
+  background_location: ^0.3.0
 
 dev_dependencies:
   flutter_test:

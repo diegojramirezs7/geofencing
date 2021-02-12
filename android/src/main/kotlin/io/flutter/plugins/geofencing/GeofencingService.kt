@@ -139,6 +139,8 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
             it.requestId
         }
 
+        // Log.i(geofenceTransition)
+
         val location = geofencingEvent.triggeringLocation
         val locationList = listOf(location.latitude,
                 location.longitude)
